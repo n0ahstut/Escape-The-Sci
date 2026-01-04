@@ -80,7 +80,7 @@ public class MazeGenerator : MonoBehaviour
 
         yield return new WaitForSeconds(0.5f);
 
-        // Generate maze using recursive backtracking with animation
+        // Generate maze using recursive backtracking
         yield return StartCoroutine(GenerateMazeRecursiveRoutine(0, 0));
 
         // Place special rooms after maze generation
@@ -164,7 +164,7 @@ public class MazeGenerator : MonoBehaviour
             }
         }
 
-        // Shuffle the entire list using Fisher-Yates algorithm
+        // Shuffle the entire list 
         for (int i = allValidCells.Count - 1; i > 0; i--)
         {
             int j = Random.Range(0, i + 1);
@@ -207,17 +207,12 @@ public class MazeGenerator : MonoBehaviour
 
         if (roomsPlaced < _numberOfRooms)
         {
-            Debug.LogWarning($"Could only place {roomsPlaced} rooms out of {_numberOfRooms} requested. Try increasing maze size or decreasing number of rooms/minimum distance.");
+            Debug.LogWarning($"Could only place {roomsPlaced} rooms out of {_numberOfRooms} requested. ");
         }
     }
 
     private void ReplaceWithRoom(int x, int z)
     {
-        if (_roomPrefab == null)
-        {
-            Debug.LogWarning("Room Prefab is not assigned!");
-            return;
-        }
 
         // Store wall states from old cell
         bool hasLeftWall = _mazeGrid[x, z].HasLeftWall();
@@ -269,7 +264,6 @@ public class MazeGenerator : MonoBehaviour
         {
             for (int z = 0; z < _mazeDepth; z++)
             {
-                // Fixed: was using start.y instead of start.y for z coordinate
                 int manhattanDistance = Mathf.Abs(x - start.x) + Mathf.Abs(z - start.y);
                 if (manhattanDistance >= distance && manhattanDistance < distance + 2)
                 {
@@ -308,25 +302,28 @@ public class MazeGenerator : MonoBehaviour
 
     private void RemoveWallBetween(Vector2Int current, Vector2Int neighbor)
     {
+        MazeCell currentCell = _mazeGrid[current.x, current.y];
+        MazeCell neighborCell = _mazeGrid[neighbor.x, neighbor.y];
+
         if (neighbor.x > current.x)
         {
-            _mazeGrid[current.x, current.y].ClearRightWall();
-            _mazeGrid[neighbor.x, neighbor.y].ClearLeftWall();
+            currentCell.ClearRightWall();
+            neighborCell.ClearLeftWall();
         }
         else if (neighbor.x < current.x)
         {
-            _mazeGrid[current.x, current.y].ClearLeftWall();
-            _mazeGrid[neighbor.x, neighbor.y].ClearRightWall();
+            currentCell.ClearLeftWall();
+            neighborCell.ClearRightWall();
         }
         else if (neighbor.y > current.y)
         {
-            _mazeGrid[current.x, current.y].ClearFrontWall();
-            _mazeGrid[neighbor.x, neighbor.y].ClearBackWall();
+            currentCell.ClearFrontWall();
+            neighborCell.ClearBackWall();
         }
         else if (neighbor.y < current.y)
         {
-            _mazeGrid[current.x, current.y].ClearBackWall();
-            _mazeGrid[neighbor.x, neighbor.y].ClearFrontWall();
+            currentCell.ClearBackWall();
+            neighborCell.ClearFrontWall();
         }
     }
 
