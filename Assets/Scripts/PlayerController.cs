@@ -5,14 +5,14 @@ public class PlayerController : MonoBehaviour
     [Header("Movement Settings")]
     [SerializeField] private float walkSpeed = 5f;
     [SerializeField] private float runSpeed = 8f;
-    [SerializeField] private float gravity = -9.81f;
-    [SerializeField] private float groundCheckDistance = 0.4f;
+    [SerializeField] private float groundCheckDistance = 0.2f;
     [SerializeField] private LayerMask groundMask;
 
     [Header("Camera Settings")]
-    [SerializeField] private Camera playerCamera;
-    [SerializeField] private float mouseSensitivity = 100f;
+    [SerializeField] private float horizontalSensitivity = 5f;
+    [SerializeField] private float verticalSensitivity = 2f;
     [SerializeField] private float maxLookAngle = 80f;
+    [SerializeField] private float cameraHeight = 0.6f;
 
     [Header("Interaction Settings")]
     [SerializeField] private float interactionRange = 3f;
@@ -22,114 +22,171 @@ public class PlayerController : MonoBehaviour
     [Header("UI Control")]
     [SerializeField] private KeyCode taskListKey = KeyCode.T;
 
-    // Components
-    private CharacterController controller;
+    private Rigidbody rb;
+    private Camera playerCamera;
 
-    // Movement
-    private Vector3 velocity;
+    private Vector3 moveDirection;
     private bool isGrounded;
     private float currentSpeed;
-
-    // Camera rotation
     private float xRotation = 0f;
 
-    // State
     private bool isUIOpen = false;
     private bool canMove = true;
 
-    // Events for game management
+    private Vector2Int currentCell;
+    private bool isInRoom = false;
+
     public delegate void InteractionHandler(GameObject interactedObject);
     public event InteractionHandler OnInteract;
 
     public delegate void UIToggleHandler(bool isOpen);
     public event UIToggleHandler OnTaskListToggle;
 
-    void Start()
+    public delegate void CellChangedHandler(Vector2Int newCell, bool isRoom);
+    public event CellChangedHandler OnCellChanged;
+
+    public Vector2Int CurrentCell => currentCell;
+    public bool IsInRoom => isInRoom;
+
+    private void Start()
     {
-        controller = GetComponent<CharacterController>();
-
-        if (playerCamera == null)
-        {
-            playerCamera = GetComponentInChildren<Camera>();
-        }
-
-        // Lock and hide cursor
+        SetupRigidbody();
+        SetupCamera();
+        
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
     }
 
-    void Update()
+    private void SetupRigidbody()
     {
-        // Handle UI toggle
+        rb = GetComponent<Rigidbody>();
+
+        if (rb == null)
+        {
+            rb = gameObject.AddComponent<Rigidbody>();
+        }
+
+        rb.freezeRotation = true;
+        rb.interpolation = RigidbodyInterpolation.Interpolate;
+        rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+    }
+
+    private void SetupCamera()
+    {
+        playerCamera = GetComponentInChildren<Camera>();
+        
+        if (playerCamera == null)
+        {
+            playerCamera = Camera.main;
+            
+            if (playerCamera == null)
+            {
+                GameObject camObj = new GameObject("PlayerCamera");
+                playerCamera = camObj.AddComponent<Camera>();
+            }
+            
+            playerCamera.transform.SetParent(transform);
+            playerCamera.transform.localPosition = new Vector3(0, cameraHeight, 0);
+            playerCamera.transform.localRotation = Quaternion.identity;
+        }
+    }
+
+    private void Update()
+    {
+        if (GameManager.Instance != null && GameManager.Instance.CurrentState != GameManager.GameState.Playing)
+        {
+            return;
+        }
+        
         if (Input.GetKeyDown(taskListKey))
         {
             ToggleTaskList();
         }
 
-        // Only allow movement and interaction when UI is closed and movement is enabled
         if (!isUIOpen && canMove)
         {
-            HandleMovement();
+            HandleInput();
             HandleMouseLook();
             HandleInteraction();
         }
+
+        UpdateCellPosition();
     }
 
-    void HandleMovement()
+    private void FixedUpdate()
     {
-        // Ground check
-        isGrounded = Physics.CheckSphere(transform.position, groundCheckDistance, groundMask);
-
-        if (isGrounded && velocity.y < 0)
+        if (GameManager.Instance != null && GameManager.Instance.CurrentState != GameManager.GameState.Playing)
         {
-            velocity.y = -2f; // Small downward force to keep grounded
+            return;
         }
+        
+        if (!isUIOpen && canMove)
+        {
+            HandleMovement();
+        }
+    }
 
-        // Get input
-        float horizontal = Input.GetAxisRaw("Horizontal"); // A/D
-        float vertical = Input.GetAxisRaw("Vertical");     // W/S
+    private void UpdateCellPosition()
+    {
+        if (MazeGenerator.Instance == null) return;
 
-        // Determine speed (shift to run)
+        Vector2Int newCell = MazeGenerator.Instance.GetCellFromWorldPosition(transform.position);
+        
+        if (newCell != currentCell)
+        {
+            currentCell = newCell;
+            isInRoom = MazeGenerator.Instance.IsCellRoom(currentCell.x, currentCell.y);
+            OnCellChanged?.Invoke(currentCell, isInRoom);
+        }
+    }
+
+    private void HandleInput()
+    {
+        isGrounded = Physics.Raycast(transform.position, Vector3.down, groundCheckDistance, groundMask);
+
+        float horizontal = Input.GetAxisRaw("Horizontal");
+        float vertical = Input.GetAxisRaw("Vertical");
+
         currentSpeed = Input.GetKey(KeyCode.LeftShift) ? runSpeed : walkSpeed;
 
-        // Calculate movement direction relative to where player is looking
-        Vector3 move = transform.right * horizontal + transform.forward * vertical;
-
-        // Move the controller
-        controller.Move(move * currentSpeed * Time.deltaTime);
-
-        // Apply gravity
-        velocity.y += gravity * Time.deltaTime;
-        controller.Move(velocity * Time.deltaTime);
+        moveDirection = (transform.right * horizontal + transform.forward * vertical).normalized;
     }
 
-    void HandleMouseLook()
+    private void HandleMovement()
     {
-        // Get mouse input
-        float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity * Time.deltaTime;
-        float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity * Time.deltaTime;
+        if (moveDirection.magnitude > 0.1f)
+        {
+            Vector3 targetVelocity = moveDirection * currentSpeed;
+            targetVelocity.y = rb.velocity.y;
+            rb.velocity = targetVelocity;
+        }
+        else
+        {
+            rb.velocity = new Vector3(0f, rb.velocity.y, 0f);
+        }
+    }
 
-        // Rotate camera up/down 
+    private void HandleMouseLook()
+    {
+        float mouseX = Input.GetAxisRaw("Mouse X") * horizontalSensitivity;
+        float mouseY = Input.GetAxisRaw("Mouse Y") * verticalSensitivity;
+
         xRotation -= mouseY;
         xRotation = Mathf.Clamp(xRotation, -maxLookAngle, maxLookAngle);
         playerCamera.transform.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
 
-        // Rotate player left/right
         transform.Rotate(Vector3.up * mouseX);
     }
 
-    void HandleInteraction()
+    private void HandleInteraction()
     {
-        // Check for interaction input
         if (Input.GetKeyDown(interactKey))
         {
-            // Raycast from camera to detect interactable objects
             Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
             RaycastHit hit;
 
             if (Physics.Raycast(ray, out hit, interactionRange, interactableMask))
             {
-                // Check if the object has an interactable component
                 IInteractable interactable = hit.collider.GetComponent<IInteractable>();
 
                 if (interactable != null)
@@ -137,21 +194,20 @@ public class PlayerController : MonoBehaviour
                     interactable.Interact(this);
                 }
 
-                // Trigger event for game management
                 OnInteract?.Invoke(hit.collider.gameObject);
             }
         }
     }
 
-    void ToggleTaskList()
+    private void ToggleTaskList()
     {
         isUIOpen = !isUIOpen;
 
-        // Toggle cursor visibility and lock state
         if (isUIOpen)
         {
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
+            rb.velocity = Vector3.zero;
         }
         else
         {
@@ -159,21 +215,22 @@ public class PlayerController : MonoBehaviour
             Cursor.visible = false;
         }
 
-        // Notify game manager about UI state change
         OnTaskListToggle?.Invoke(isUIOpen);
     }
 
-    // Public methods for game management
     public void SetMovementEnabled(bool enabled)
     {
         canMove = enabled;
+        if (!enabled)
+        {
+            rb.velocity = Vector3.zero;
+        }
     }
 
     public void TeleportTo(Vector3 position)
     {
-        controller.enabled = false;
         transform.position = position;
-        controller.enabled = true;
+        rb.velocity = Vector3.zero;
     }
 
     public Camera GetCamera()
@@ -194,8 +251,6 @@ public class PlayerController : MonoBehaviour
         }
     }
 
-
-    // Interface for interactable objects (teachers, students, etc.)
     public interface IInteractable
     {
         void Interact(PlayerController player);
