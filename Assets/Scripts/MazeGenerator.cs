@@ -25,7 +25,7 @@ public class MazeGenerator : MonoBehaviour
     [SerializeField] private GameObject _deanPrefab;
     [SerializeField] private float _spawnY = 12f;
     [SerializeField] private float _deanHeightOffset = -0.3f;
-    
+
     [Header("Teacher Prefabs")]
     [SerializeField] private GameObject _mrDahlemPrefab;
     [SerializeField] private GameObject _msMcGuiganPrefab;
@@ -60,7 +60,7 @@ public class MazeGenerator : MonoBehaviour
     private List<GameObject> _deanInstances = new List<GameObject>();
     private List<GameObject> _teacherInstances = new List<GameObject>();
     private List<GameObject> _studentInstances = new List<GameObject>();
-    
+
     private enum Corner { BottomLeft, BottomRight, TopLeft, TopRight }
     private Corner _playerCorner;
 
@@ -121,13 +121,13 @@ public class MazeGenerator : MonoBehaviour
         // Wait a frame for NavMesh to be ready
         yield return null;
         yield return null;
-        
+
         ColorMazeWalls();
         if (_createRoof)
         {
             CreateRoof();
         }
-        
+
         SpawnTeachers();
         SpawnStudents();
         SpawnPlayer();
@@ -151,17 +151,17 @@ public class MazeGenerator : MonoBehaviour
 
         PlaceRooms();
         BakeNavMesh();
-        
+
         // Wait for NavMesh to be ready
         yield return null;
         yield return null;
-        
+
         ColorMazeWalls();
         if (_createRoof)
         {
             CreateRoof();
         }
-        
+
         SpawnTeachers();
         SpawnStudents();
         SpawnPlayer();
@@ -187,18 +187,18 @@ public class MazeGenerator : MonoBehaviour
         // Create a light yellow material for hallway walls
         Material hallwayMaterial = new Material(Shader.Find("Standard"));
         hallwayMaterial.color = _hallwayWallColor;
-        
+
         // Create a blue material for bathroom walls
         Material bathroomMaterial = new Material(Shader.Find("Standard"));
         bathroomMaterial.color = new Color(0.6f, 0.8f, 1f, 1f); // Light blue
-        
+
         for (int x = 0; x < _mazeWidth; x++)
         {
             for (int z = 0; z < _mazeDepth; z++)
             {
                 MazeCell cell = _mazeGrid[x, z];
                 if (cell == null) continue;
-                
+
                 // Color bathrooms light blue
                 if (cell.IsBathroom)
                 {
@@ -221,7 +221,7 @@ public class MazeGenerator : MonoBehaviour
                 }
             }
         }
-        
+
         Debug.Log("Maze walls colored!");
     }
 
@@ -230,34 +230,34 @@ public class MazeGenerator : MonoBehaviour
         // Create a green material for the roof
         Material roofMaterial = new Material(Shader.Find("Standard"));
         roofMaterial.color = _roofColor;
-        
+
         // Create a single large roof plane
         GameObject roof = GameObject.CreatePrimitive(PrimitiveType.Cube);
         roof.name = "MazeRoof";
         roof.transform.SetParent(transform);
-        
+
         // Size it to cover the entire maze (1.5x for extra coverage)
         float roofWidth = _mazeWidth * _cellSize * 1.5f;
         float roofDepth = _mazeDepth * _cellSize * 1.5f;
-        
+
         roof.transform.localScale = new Vector3(roofWidth, 0.2f, roofDepth);
         roof.transform.position = new Vector3(
             140f,
             _spawnY + _roofHeight,
             roofDepth / 2f + 10f
         );
-        
+
         // Apply material
         Renderer roofRenderer = roof.GetComponent<Renderer>();
         roofRenderer.material = roofMaterial;
-        
+
         // Remove collider so player can't bump into it from below
         Collider roofCollider = roof.GetComponent<Collider>();
         if (roofCollider != null)
         {
             Destroy(roofCollider);
         }
-        
+
         Debug.Log($"Roof created at Y={_spawnY + _roofHeight}");
     }
 
@@ -270,7 +270,7 @@ public class MazeGenerator : MonoBehaviour
         }
 
         Vector3 spawnPos;
-        
+
         if (_debugSpawnNearDahlem && _teacherInstances.Count > 0)
         {
             // Spawn near Mr. Dahlem (first teacher)
@@ -284,7 +284,7 @@ public class MazeGenerator : MonoBehaviour
             spawnPos = GetCornerPosition(_playerCorner);
             Debug.Log($"Player spawned at {_playerCorner} corner: {spawnPos}");
         }
-        
+
         _playerInstance = Instantiate(_playerPrefab, spawnPos, Quaternion.identity);
         _playerInstance.tag = "Player";
     }
@@ -297,21 +297,21 @@ public class MazeGenerator : MonoBehaviour
             _msMcGuiganPrefab,
             _mrNoodyPrefab
         };
-        
+
         string[] teacherNames = new string[]
         {
             "Mr. Dahlem",
             "Ms. Guig",
             "Mr. Noody"
         };
-        
+
         TeacherType[] teacherTypes = new TeacherType[]
         {
             TeacherType.MrDahlem,
             TeacherType.MsMcGuigan,
             TeacherType.MrNoody
         };
-        
+
         for (int i = 0; i < _roomPositions.Count && i < teacherPrefabs.Length; i++)
         {
             if (teacherPrefabs[i] == null)
@@ -319,41 +319,41 @@ public class MazeGenerator : MonoBehaviour
                 Debug.LogWarning($"Teacher prefab for {teacherNames[i]} not assigned!");
                 continue;
             }
-            
+
             Vector2Int roomPos = _roomPositions[i];
             MazeCell roomCell = _mazeGrid[roomPos.x, roomPos.y];
-            
+
             // Use the room cell's transform position plus offset
             Vector3 spawnPos = new Vector3(
                 roomCell.transform.position.x + _teacherSpawnOffset.x,
                 _spawnY + _teacherHeightOffset,
                 roomCell.transform.position.z + _teacherSpawnOffset.z
             );
-            
+
             Debug.Log($"Teacher spawn Y: {spawnPos.y}, SpawnY: {_spawnY}, HeightOffset: {_teacherHeightOffset}");
-            
+
             GameObject teacher = Instantiate(teacherPrefabs[i], spawnPos, Quaternion.identity);
             teacher.name = teacherNames[i];
-            
+
             // Parent teacher to the room so they stay together
             teacher.transform.SetParent(roomCell.transform);
-            
+
             TeacherController teacherController = teacher.GetComponent<TeacherController>();
             if (teacherController != null)
             {
                 teacherController.SetTeacherType(teacherTypes[i]);
             }
-            
+
             _teacherInstances.Add(teacher);
             Debug.Log($"{teacherNames[i]} spawned in room at world position {spawnPos}, cell ({roomPos.x}, {roomPos.y}), IsRoom: {roomCell.IsRoom}");
-            
+
             // Spawn gym equipment for Mr. Dahlem
             if (teacherTypes[i] == TeacherType.MrDahlem)
             {
                 SpawnGymEquipment(spawnPos, roomCell);
             }
         }
-        
+
         if (_roomPositions.Count < teacherPrefabs.Length)
         {
             Debug.LogWarning($"Not enough rooms for all teachers! Rooms: {_roomPositions.Count}, Teachers: {teacherPrefabs.Length}");
@@ -375,7 +375,7 @@ public class MazeGenerator : MonoBehaviour
         {
             Debug.LogWarning("Basketball prefab not assigned!");
         }
-        
+
         // Spawn hoop across from teacher
         if (_hoopPrefab != null)
         {
@@ -395,7 +395,7 @@ public class MazeGenerator : MonoBehaviour
     {
         int x = 0;
         int z = 0;
-        
+
         switch (corner)
         {
             case Corner.BottomLeft:
@@ -415,7 +415,7 @@ public class MazeGenerator : MonoBehaviour
                 z = _mazeDepth - 3;
                 break;
         }
-        
+
         return new Vector3(x * _cellSize, _spawnY, z * _cellSize);
     }
 
@@ -440,17 +440,17 @@ public class MazeGenerator : MonoBehaviour
         {
             Vector3 spawnPos = GetCornerPosition(deanCorners[i]);
             spawnPos.y += _deanHeightOffset;
-            
+
             GameObject dean = Instantiate(_deanPrefab, spawnPos, Quaternion.identity);
             dean.name = $"Dean_{i + 1}";
-            
+
             DeanController deanController = dean.GetComponent<DeanController>();
             if (deanController != null)
             {
                 Transform[] patrolPoints = GeneratePatrolPoints(deanCorners[i]);
                 deanController.SetPatrolPoints(patrolPoints);
             }
-            
+
             _deanInstances.Add(dean);
             Debug.Log($"Dean {i + 1} spawned at {deanCorners[i]} corner: {spawnPos}");
         }
@@ -465,65 +465,65 @@ public class MazeGenerator : MonoBehaviour
         }
 
         int studentCount = 40; // More students
-        
+
         GameObject studentParent = new GameObject("Students");
-        
+
         for (int i = 0; i < studentCount; i++)
         {
             // Random position anywhere in the maze (avoiding edges)
             int x = Random.Range(1, _mazeWidth - 1);
             int z = Random.Range(1, _mazeDepth - 1);
-            
+
             // Add some randomness within the cell
             float offsetX = Random.Range(0f, _cellSize);
             float offsetZ = Random.Range(0f, _cellSize);
-            
+
             Vector3 spawnPos = new Vector3(
                 (x * _cellSize) + offsetX,
                 _spawnY + _studentHeightOffset,
                 (z * _cellSize) + offsetZ
             );
-            
+
             GameObject student = Instantiate(_studentPrefab, spawnPos, Quaternion.identity, studentParent.transform);
             student.name = $"Student_{i + 1}";
-            
+
             // Random rotation
             student.transform.rotation = Quaternion.Euler(0, Random.Range(0f, 360f), 0);
-            
+
             // Make sure StudentController is attached
             StudentController controller = student.GetComponent<StudentController>();
             if (controller == null)
             {
                 controller = student.AddComponent<StudentController>();
             }
-            
+
             _studentInstances.Add(student);
         }
-        
+
         Debug.Log($"Spawned {studentCount} students throughout the maze");
     }
 
     private Transform[] GeneratePatrolPoints(Corner startCorner)
     {
         List<Transform> points = new List<Transform>();
-        
+
         GameObject patrolParent = new GameObject($"PatrolPoints_{startCorner}");
-        
+
         // Generate patrol points spread across the maze
         int numPoints = 8;
-        
+
         for (int i = 0; i < numPoints; i++)
         {
             // Random position anywhere in the maze (avoiding edges)
             int x = Random.Range(2, _mazeWidth - 2);
             int z = Random.Range(2, _mazeDepth - 2);
-            
+
             GameObject point = new GameObject($"PatrolPoint_{i}");
             point.transform.position = new Vector3(x * _cellSize, _spawnY, z * _cellSize);
             point.transform.SetParent(patrolParent.transform);
             points.Add(point.transform);
         }
-        
+
         return points.ToArray();
     }
 
@@ -702,7 +702,7 @@ public class MazeGenerator : MonoBehaviour
         {
             Debug.LogWarning($"Could only place {roomsPlaced} rooms out of {_numberOfRooms} requested.");
         }
-        
+
         if (bathroomsPlaced < _numberOfBathrooms)
         {
             Debug.LogWarning($"Could only place {bathroomsPlaced} bathrooms out of {_numberOfBathrooms} requested.");
@@ -897,7 +897,7 @@ public class MazeGenerator : MonoBehaviour
         // Pick a random corner different from where deans might be
         Corner[] corners = { Corner.BottomLeft, Corner.BottomRight, Corner.TopLeft, Corner.TopRight };
         Corner randomCorner = corners[Random.Range(0, corners.Length)];
-        
+
         Vector3 pos = GetCornerPosition(randomCorner);
         return pos;
     }
